@@ -123,8 +123,12 @@ class AC2DataFile:
                     return fileEntry
                 if identifier < fileEntry.identifier:
                     print "check left, cur dir is", directory
-                    print "%08x < %08x, need to check subdirectory %u @ %08x" % (identifier, fileEntry.identifier, subdirIndex, directory.subdirectoryOffsets[subdirIndex])
-                    directory = AC2Directory(self, directory.subdirectoryOffsets[subdirIndex])
+                    subdirectoryOffset = directory.subdirectoryOffsets[subdirIndex]
+                    if subdirectoryOffset == 0:
+                        print "%08x not found" % identifier
+                        return None
+                    print "%08x < %08x, need to check subdirectory %u @ %08x" % (identifier, fileEntry.identifier, subdirIndex, subdirectoryOffset)
+                    directory = AC2Directory(self, subdirectoryOffset)
                     searchLeftSubdir = True
                     break
                 subdirIndex = subdirIndex + 1
