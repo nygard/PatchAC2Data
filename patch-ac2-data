@@ -27,17 +27,24 @@ class AC2Directory:
           # 62*4 + 4 + 62*16 = 1244
           buf = dataFile.readDataFromBlocks(offset, 1244)
           count, = struct.unpack_from("<I", buf, 248) # 62*4=248
+          self.count = count
+
           offsets = struct.unpack_from("<62I", buf, 0)
+          if shouldLoadSubdirectories:
+             for sdo in offsets:
+                 self.subdirectories.append(AC2Directory(dataFile, sdo, True))
+
           sdoc = count + 1
           self.subdirectoryOffsets = offsets[:sdoc]
           for index in range(0, count):
               (identifier, offset, size, mtime) = struct.unpack_from("<4I", buf, 252 + 16 * index)
               #print "%2u: %08x %08x %08x %08x" % (index, identifier, offset, size, mtime)
-              fe = AC2FileEntry(identifier, offset, size, mtime)
-              print "%2u: %s" % (index, fe)
+              fileEntry = AC2FileEntry(identifier, offset, size, mtime)
+              print "%2u: %s" % (index, fileEntry)
+              self.files.append(fileEntry)
 
       def __str__(self):
-          return "AC2Directory at %08x" % (self.offset)
+          return "AC2Directory at %08x, count: %u, subdirectory count: %u, file count: %u" % (self.offset, self.count, len(self.subdirectories), len(self.files))
 
 class AC2DataFile:
       """A simple class to allow data replacement in Asheron's Call 2 data files."""
