@@ -18,6 +18,7 @@
 import struct
 import binascii
 import time
+import math
 
 class AC2Exception(Exception):
     pass
@@ -68,7 +69,7 @@ class AC2DataFile:
     """A simple class to allow data replacement in Asheron's Call 2 data files."""
 
     def __init__(self, filename):
-        self.fileHandle = open(filename, "rb")
+        self.fileHandle = open(filename, "rb+")
         #print self.fileHandle
         self.fileHandle.seek(0x12c)
         buf = self.fileHandle.read(4*9)
@@ -85,6 +86,20 @@ class AC2DataFile:
         self.freeBlockCount = freeBlockCount
         self.rootOffset     = rootOffset
         self.cachedVersion  = None
+        self.dirty          = False
+
+    def close(self):
+        if self.dirty:
+            print "Dirty, must write header."
+            self.writeHeader()
+        self.fileHandle.close()
+
+    def writeHeader(self):
+        buf = struct.pack("<9I", 0x00005442, self.blockSize, self.fileSize, self.contentType, self.contentSubtype, self.firstFreeBlock, self.lastFreeBlock, self.freeBlockCount, self.rootOffset)
+        print "buf len:", len(buf)
+        self.fileHandle.seek(0x12c)
+        self.fileHandle.write(buf)
+        self.dirty = False
 
     def version(self):
         if self.cachedVersion == None:
@@ -161,17 +176,87 @@ class AC2DataFile:
     def readDataFromFileEntry(self, fileEntry):
         return self.readDataFromBlocks(fileEntry.offset, fileEntry.size)
 
+    def addFreeBlocks(self, count):
+        firstNewBlock = self.fileSize
+        currentBlockOffset = self.fileSize
+        blockData = "\0" * (self.blockSize - 4)
 
-df = AC2DataFile("mod/portal.dat")
-#print df
+        # Need to update the last free block to point to the next, newly created free block
+        if self.lastFreeBlock != 0:
+            buf = struct.pack("<I", self.lastFreeBlock | 0x80000000)
+            self.fileHandle.seek(self.lastFreeBlock)
+            self.fileHandle.write(buf)
+            self.fileHandle.write(blockData)
 
-print df.root()
-print "======================================================================"
-#fe = df.searchForFileEntry(0x41000000)
-fe = df.searchForFileEntry(0x01000001)
-#fe = df.searchForFileEntry(0x0100001c)
-print fe
+        # Now write the free blocks.
+        for index in range(0, count):
+            nextBlockOffset = 0
+            if index < count - 1:
+                nextBlockOffset = currentBlockOffset + self.blockSize
+            if 1:
+                print "Writing free block %4lu (@ %08x) to point to %08x" % (index, currentBlockOffset, nextBlockOffset)
+            buf = struct.pack("<I", nextBlockOffset | 0x80000000)
+            self.fileHandle.seek(currentBlockOffset)
+            self.fileHandle.write(buf)
+            self.fileHandle.write(blockData)
 
-if fe:
-    data = df.readDataFromFileEntry(fe)
-    print len(data)
+            lastBlockOffset = currentBlockOffset
+            currentBlockOffset = nextBlockOffset
+
+        if self.firstFreeBlock == 0:
+            self.firstFreeBlock = firstNewBlock
+
+        self.freeBlockCount = self.freeBlockCount + count
+        self.fileSize = self.fileSize + count * self.blockSize
+        self.lastFreeBlock = lastBlockOffset
+        self.dirty = True
+
+    def freeSpace(self):
+        return self.freeBlockCount * (self.blockSize - 4)
+
+    def ensureAvailableFreeSpace(self, length):
+        if length > self.freeSpace():
+            # Add more space to accomodate the data.  Add in 1 MB chunks.
+            neededSpace = length - self.freeSpace()
+
+            bytesPerExtension = ((1024 * 1024) / self.blockSize) * (self.blockSize - 4)
+            extensions = math.ceil(float(neededSpace) / bytesPerExtension)
+            count = int(1024 * 1024 / self.blockSize * extensions)
+            if 1:
+                print "Need %u bytes more." % neededSpace
+                print "bytesPerExtension: %u" % bytesPerExtension
+                print "extensions: %u" % extensions
+                print "count: %u" % count
+            self.addFreeBlocks(count)
+            if length > self.freeSpace():
+                print "Error: Failed to add enough data to data file. (%u required, %u available)" % (length, self.freeSpace())
+        None
+
+if 0:
+    df = AC2DataFile("test/portal.dat")
+    #print df
+
+    print df.root()
+    print "======================================================================"
+
+    #fe = df.searchForFileEntry(0x41000000)
+    #fe = df.searchForFileEntry(0x01000001)
+    #fe = df.searchForFileEntry(0x0100001c)
+
+    for identifier in [0x41000000, 0x41000002, 0x41000003, 0x41000004, 0x41000005, 0x41000006, 0x41000007]:
+        fe = df.searchForFileEntry(identifier)
+        print fe
+        if fe:
+            data = df.readDataFromFileEntry(fe)
+            print len(data)
+            filename = "out/%08x.dat" % identifier
+            f1 = open(filename, "wb")
+            f1.write(data)
+            f1.close()
+
+if 1:
+    df = AC2DataFile("test/cell_2.dat")
+    print df
+    df.ensureAvailableFreeSpace(1024 * 1024 * 8)
+    df.close()
+    
