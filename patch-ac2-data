@@ -34,9 +34,8 @@ class AC2FileEntry:
         return "AC2FileEntry <identifier: %08x, offset: %08x, size: %08x, mtime: %08x -- %s>" % (self.identifier, self.offset, self.size, self.mtime, time.ctime(self.mtime))
 
 class AC2Directory:
-    def __init__(self, dataFile, offset, shouldLoadSubdirectories=False):
+    def __init__(self, dataFile, offset):
         self.offset = offset
-        self.subdirectories = []
         self.subdirectoryOffsets = []
         self.files = []
 
@@ -46,13 +45,8 @@ class AC2Directory:
         self.count = count
         #print "count:", count
 
-        offsets = struct.unpack_from("<62I", buf, 0)
-        if shouldLoadSubdirectories:
-            for sdo in offsets:
-                self.subdirectories.append(AC2Directory(dataFile, sdo, True))
+        self.subdirectoryOffsets = struct.unpack_from("<62I", buf, 0)
 
-        sdoc = count + 1
-        self.subdirectoryOffsets = offsets[:sdoc]
         if 0:
             print "offsets:", ", ".join(["%08x" % offset for offset in self.subdirectoryOffsets])
         for index in range(0, count):
@@ -63,7 +57,7 @@ class AC2Directory:
             self.files.append(fileEntry)
 
     def __str__(self):
-        return "AC2Directory at %08x, count: %u, subdirectory count: %u, file count: %u" % (self.offset, self.count, len(self.subdirectories), len(self.files))
+        return "AC2Directory at %08x, count: %u, file count: %u, leaf? %s" % (self.offset, self.count, len(self.files), self.subdirectoryOffsets[0] == 0)
 
 class AC2DataFile:
     """A simple class to allow data replacement in Asheron's Call 2 data files."""
@@ -234,7 +228,7 @@ class AC2DataFile:
 
 if 0:
     df = AC2DataFile("test/portal.dat")
-    #print df
+    print df
 
     print df.root()
     print "======================================================================"
@@ -257,6 +251,6 @@ if 0:
 if 1:
     df = AC2DataFile("test/cell_2.dat")
     print df
+    #print df.root()
     df.ensureAvailableFreeSpace(1024 * 1024 * 8)
     df.close()
-    
