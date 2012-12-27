@@ -40,7 +40,7 @@ class AC2Directory:
             (identifier, offset, size, mtime) = struct.unpack_from("<4I", buf, 252 + 16 * index)
             #print "%2u: %08x %08x %08x %08x" % (index, identifier, offset, size, mtime)
             fileEntry = AC2FileEntry(identifier, offset, size, mtime)
-            print "%2u: %s" % (index, fileEntry)
+            #print "%2u: %s" % (index, fileEntry)
             self.files.append(fileEntry)
 
     def __str__(self):
@@ -51,7 +51,7 @@ class AC2DataFile:
 
     def __init__(self, filename):
         self.fileHandle = open(filename, "rb")
-        print self.fileHandle
+        #print self.fileHandle
         self.fileHandle.seek(0x12c)
         buf = self.fileHandle.read(4*9)
         #print "read buf:", binascii.hexlify(buf)
@@ -66,16 +66,24 @@ class AC2DataFile:
         self.lastFreeBlock  = lastFreeBlock
         self.freeBlockCount = freeBlockCount
         self.rootOffset     = rootOffset
+        self.cachedVersion  = None
+
+    def version(self):
+        if self.cachedVersion == None:
+            versionFE = df.searchForFileEntry(0xffff0001)
+            data = self.readDataFromBlocks(versionFE.offset, versionFE.size)
+            self.cachedVersion = struct.unpack("<2I", data)[0]
+        return self.cachedVersion
 
     def __str__(self):
-        return "file: %s, blockSize: %u, fileSize: %08x, contentType: %08x, contentSubtype: %08x, firstFreeBlock: %08x, lastFreeBlock: %08x, freeBlockCount: %u, rootOffset: %08x" % (self.fileHandle.name, self.blockSize, self.fileSize, self.contentType, self.contentSubtype, self.firstFreeBlock, self.lastFreeBlock, self.freeBlockCount, self.rootOffset)
+        return "file: %s, blockSize: %u, fileSize: %08x, contentType: %08x, contentSubtype: %08x, firstFreeBlock: %08x, lastFreeBlock: %08x, freeBlockCount: %u, rootOffset: %08x, dataVersion: %u" % (self.fileHandle.name, self.blockSize, self.fileSize, self.contentType, self.contentSubtype, self.firstFreeBlock, self.lastFreeBlock, self.freeBlockCount, self.rootOffset, self.version())
 
     def readDataFromBlocks(self, offset, expectedLength):
         blockData = ""
         self.fileHandle.seek(offset)
         nextBlock = offset
         while nextBlock != 0:
-            print "nextBlock: %08x" % nextBlock
+            #print "nextBlock: %08x" % nextBlock
             if (nextBlock % self.blockSize) != 0:
                 raise AC2Exception("Block offset %08x does not begin on a block boundary" % (nextBlock))
             if nextBlock < self.blockSize or nextBlock >= self.fileSize:
@@ -124,4 +132,10 @@ df = AC2DataFile("mod/portal.dat")
 print df
 
 print df.root()
-print df.searchForFileEntry(0xffff0001)
+versionFE = df.searchForFileEntry(0xffff0001)
+
+data = df.readDataFromBlocks(versionFE.offset, versionFE.size)
+print len(data)
+print struct.unpack("<2I", data)
+
+print df.version()
