@@ -2,6 +2,7 @@
 
 import struct
 import binascii
+import time
 
 class AC2Exception(Exception):
       pass
@@ -14,7 +15,7 @@ class AC2FileEntry:
           self.mtime      = mtime
 
       def __str__(self):
-          return "AC2FileEntry <identifier: %08x, offset: %08x, size: %08x, mtime: %08x>" % (self.identifier, self.offset, self.size, self.mtime)
+          return "AC2FileEntry <identifier: %08x, offset: %08x, size: %08x, mtime: %08x -- %s>" % (self.identifier, self.offset, self.size, self.mtime, time.ctime(self.mtime))
 
 class AC2Directory:
       def __init__(self, dataFile, offset, shouldLoadSubdirectories=False):
@@ -25,10 +26,15 @@ class AC2Directory:
 
           # 62*4 + 4 + 62*16 = 1244
           buf = dataFile.readDataFromBlocks(offset, 1244)
-          count = struct.unpack_from("<I", buf, 248) # 62*4=248
-          foo = struct.unpack_from("<62I", buf, 0)
-          print foo
-          print foo[2]
+          count, = struct.unpack_from("<I", buf, 248) # 62*4=248
+          offsets = struct.unpack_from("<62I", buf, 0)
+          sdoc = count + 1
+          self.subdirectoryOffsets = offsets[:sdoc]
+          for index in range(0, count):
+              (identifier, offset, size, mtime) = struct.unpack_from("<4I", buf, 252 + 16 * index)
+              #print "%2u: %08x %08x %08x %08x" % (index, identifier, offset, size, mtime)
+              fe = AC2FileEntry(identifier, offset, size, mtime)
+              print "%2u: %s" % (index, fe)
 
       def __str__(self):
           return "AC2Directory at %08x" % (self.offset)
