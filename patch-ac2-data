@@ -1,0 +1,44 @@
+#!/usr/bin/python
+
+import struct
+import binascii
+
+class AC2Exception(Exception):
+      pass
+
+class AC2DataFile:
+      """A simple class to allow data replacement in Asheron's Call 2 data files."""
+
+      def __init__(self, filename):
+          self.fileHandle = open(filename, "rb")
+          print self.fileHandle
+          self.fileHandle.seek(0x12c)
+          buf = self.fileHandle.read(4*9)
+          #print "read buf:", binascii.hexlify(buf)
+          magic, blockSize, fileSize, contentType, contentSubtype, firstFreeBlock, lastFreeBlock, freeBlockCount, rootOffset = struct.unpack("<IIIIIIIII", buf);
+          print "%08x %08x" % (magic, blockSize)
+          if magic != 0x00005442:
+             raise AC2Exception("Bad magic number for an AC2 data file")
+          self.blockSize      = blockSize
+          self.contentType    = contentType
+          self.contentSubtype = contentSubtype
+          self.firstFreeBlock = firstFreeBlock
+          self.lastFreeBlock  = lastFreeBlock
+          self.freeBlockCount = freeBlockCount
+          self.rootOffset     = rootOffset
+
+      def __str__(self):
+          return "file: %s, blockSize: %u, contentType: %08x, contentSubtype: %08x, firstFreeBlock: %08x, lastFreeBlock: %08x, freeBlockCount: %u, rootOffset: %08x" % (self.fileHandle.name, self.blockSize, self.contentType, self.contentSubtype, self.firstFreeBlock, self.lastFreeBlock, self.freeBlockCount, self.rootOffset)
+          str = ""
+          str += "          file: %s\n"   % self.fileHandle.name
+          str += "     blockSize: %u\n"   % self.blockSize
+          str += "   contentType: %08x\n" % self.contentType
+          str += "contentSubtype: %08x\n" % self.contentSubtype
+          str += "firstFreeBlock: %08x\n" % self.firstFreeBlock
+          str += " lastFreeBlock: %08x\n" % self.lastFreeBlock
+          str += "freeBlockCount: %u\n"   % self.freeBlockCount
+          str += "    rootOffset: %08x\n" % self.rootOffset
+          return str
+
+df = AC2DataFile("mod/portal.dat")
+print df
