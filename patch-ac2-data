@@ -28,7 +28,7 @@ class AC2Directory:
         buf = dataFile.readDataFromBlocks(offset, 1244)
         count, = struct.unpack_from("<I", buf, 248) # 62*4=248
         self.count = count
-        print "count:", count
+        #print "count:", count
 
         offsets = struct.unpack_from("<62I", buf, 0)
         if shouldLoadSubdirectories:
@@ -37,13 +37,13 @@ class AC2Directory:
 
         sdoc = count + 1
         self.subdirectoryOffsets = offsets[:sdoc]
-        if 1:
+        if 0:
             print "offsets:", ", ".join(["%08x" % offset for offset in self.subdirectoryOffsets])
         for index in range(0, count):
             (identifier, offset, size, mtime) = struct.unpack_from("<4I", buf, 252 + 16 * index)
             #print "%2u: %08x %08x %08x %08x" % (index, identifier, offset, size, mtime)
             fileEntry = AC2FileEntry(identifier, offset, size, mtime)
-            print "%2u: %s" % (index, fileEntry)
+            #print "%2u: %s" % (index, fileEntry)
             self.files.append(fileEntry)
 
     def __str__(self):
@@ -109,32 +109,32 @@ class AC2DataFile:
         return self._searchForFileEntry(identifier, self.rootOffset)
 
     def _searchForFileEntry(self, identifier, offset):
-        print "Searching for %08x starting at %08x" % (identifier, offset)
+        #print "Searching for %08x starting at %08x" % (identifier, offset)
         directory = AC2Directory(self, offset)
         while True:
-            print
-            print directory
+            #print
+            #print directory
             subdirIndex = 0
             searchLeftSubdir = False
             for fileEntry in directory.files:
-                print "%2u: Checking: %s" % (subdirIndex, fileEntry)
+                #print "%2u: Checking: %s" % (subdirIndex, fileEntry)
                 if fileEntry.identifier == identifier:
-                    print "Found!", fileEntry
+                    #print "Found!", fileEntry
                     return fileEntry
                 if identifier < fileEntry.identifier:
-                    print "check left, cur dir is", directory
+                    #print "check left, cur dir is", directory
                     subdirectoryOffset = directory.subdirectoryOffsets[subdirIndex]
                     if subdirectoryOffset == 0:
-                        print "%08x not found" % identifier
+                        #print "%08x not found" % identifier
                         return None
-                    print "%08x < %08x, need to check subdirectory %u @ %08x" % (identifier, fileEntry.identifier, subdirIndex, subdirectoryOffset)
+                    #print "%08x < %08x, need to check subdirectory %u @ %08x" % (identifier, fileEntry.identifier, subdirIndex, subdirectoryOffset)
                     directory = AC2Directory(self, subdirectoryOffset)
                     searchLeftSubdir = True
                     break
                 subdirIndex = subdirIndex + 1
             if not searchLeftSubdir:
                 # Need to check the last subdir
-                print "Check last subdir"
+                #print "Check last subdir"
                 if len(directory.files) < len(directory.subdirectoryOffsets):
                     offset = directory.subdirectoryOffsets[len(directory.files)]
                     directory = AC2Directory(self, offset)
@@ -154,8 +154,10 @@ print df.root()
 print "======================================================================"
 #fe = df.searchForFileEntry(0x41000000)
 fe = df.searchForFileEntry(0x01000001)
-#print fe
+#fe = df.searchForFileEntry(0x0100001c)
+print fe
 
-#data = df.readDataFromFileEntry(fe)
-#print len(data)
+if fe:
+    data = df.readDataFromFileEntry(fe)
+    print len(data)
 
