@@ -6,6 +6,33 @@ import binascii
 class AC2Exception(Exception):
       pass
 
+class AC2FileEntry:
+      def __init__(self, identifier, offset, size, mtime):
+          self.identifier = identifier
+          self.offset     = offset
+          self.size       = size
+          self.mtime      = mtime
+
+      def __str__(self):
+          return "AC2FileEntry <identifier: %08x, offset: %08x, size: %08x, mtime: %08x>" % (self.identifier, self.offset, self.size, self.mtime)
+
+class AC2Directory:
+      def __init__(self, dataFile, offset, shouldLoadSubdirectories=False):
+          self.offset = offset
+          self.subdirectories = []
+          self.subdirectoryOffsets = []
+          self.files = []
+
+          # 62*4 + 4 + 62*16 = 1244
+          buf = dataFile.readDataFromBlocks(offset, 1244)
+          count = struct.unpack_from("<I", buf, 248) # 62*4=248
+          foo = struct.unpack_from("<62I", buf, 0)
+          print foo
+          print foo[2]
+
+      def __str__(self):
+          return "AC2Directory at %08x" % (self.offset)
+
 class AC2DataFile:
       """A simple class to allow data replacement in Asheron's Call 2 data files."""
 
@@ -15,10 +42,11 @@ class AC2DataFile:
           self.fileHandle.seek(0x12c)
           buf = self.fileHandle.read(4*9)
           #print "read buf:", binascii.hexlify(buf)
-          magic, blockSize, fileSize, contentType, contentSubtype, firstFreeBlock, lastFreeBlock, freeBlockCount, rootOffset = struct.unpack("<IIIIIIIII", buf);
+          magic, blockSize, fileSize, contentType, contentSubtype, firstFreeBlock, lastFreeBlock, freeBlockCount, rootOffset = struct.unpack("<9I", buf);
           if magic != 0x00005442:
              raise AC2Exception("Bad magic number for an AC2 data file")
           self.blockSize      = blockSize
+          self.fileSize       = fileSize
           self.contentType    = contentType
           self.contentSubtype = contentSubtype
           self.firstFreeBlock = firstFreeBlock
@@ -27,7 +55,33 @@ class AC2DataFile:
           self.rootOffset     = rootOffset
 
       def __str__(self):
-          return "file: %s, blockSize: %u, contentType: %08x, contentSubtype: %08x, firstFreeBlock: %08x, lastFreeBlock: %08x, freeBlockCount: %u, rootOffset: %08x" % (self.fileHandle.name, self.blockSize, self.contentType, self.contentSubtype, self.firstFreeBlock, self.lastFreeBlock, self.freeBlockCount, self.rootOffset)
+          return "file: %s, blockSize: %u, fileSize: %08x, contentType: %08x, contentSubtype: %08x, firstFreeBlock: %08x, lastFreeBlock: %08x, freeBlockCount: %u, rootOffset: %08x" % (self.fileHandle.name, self.blockSize, self.fileSize, self.contentType, self.contentSubtype, self.firstFreeBlock, self.lastFreeBlock, self.freeBlockCount, self.rootOffset)
+
+      def readDataFromBlocks(self, offset, expectedLength):
+          blockData = ""
+          self.fileHandle.seek(offset)
+          nextBlock = offset
+          while nextBlock != 0:
+                print "nextBlock: %08x" % nextBlock
+                if (nextBlock % self.blockSize) != 0:
+                   raise AC2Exception("Block offset %08x does not begin on a block boundary" % (nextBlock))
+                if nextBlock < self.blockSize or nextBlock >= self.fileSize:
+                   raise AC2Exception("Block offset %08x does not fall within data area of file (%08x - %08x)" % (nextBlock, blockSize, fileSize))
+                if (nextBlock & 0x80000000) != 0:
+                   raise AC2Exception("Block chain starting at %08x contains free block %08x" % (offset, nextBlock))
+                nextBlock, = struct.unpack("<I", self.fileHandle.read(4))
+                blockData += self.fileHandle.read(self.blockSize-4)
+
+          if len(blockData) < expectedLength:
+             raise AC2Exception("Data length (%lu) is shorter than expected (%u)" % (len(blockData), expectedLength))
+          if len(blockData) > expectedLength:
+             blockData = blockData[:expectedLength]
+          return blockData
+
+      def root(self):
+          return AC2Directory(self, self.rootOffset)
 
 df = AC2DataFile("mod/portal.dat")
 print df
+
+print df.root()
