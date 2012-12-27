@@ -82,10 +82,17 @@ class AC2DataFile:
         self.cachedVersion  = None
         self.dirty          = False
 
-    def close(self):
+    def __del__(self):
+        #print "Destructing AC2DataFile, flushing..."
+        self.flush()
+
+    def flush(self):
         if self.dirty:
             print "Dirty, must write header."
             self.writeHeader()
+
+    def close(self):
+        self.flush()
         self.fileHandle.close()
 
     def writeHeader(self):
