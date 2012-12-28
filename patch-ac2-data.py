@@ -19,6 +19,7 @@ import struct
 import binascii
 import time
 import math
+import Image # PIL 1.1.7 <http://www.pythonware.com/products/pil/>
 
 class AC2Exception(Exception):
     pass
@@ -384,16 +385,26 @@ if 0:
             f1.close()
 
 if 1:
-    #df = AC2DataFile("test/cell_2.dat")
     df = AC2DataFile("test/portal.dat")
     print df
-    #print df.root()
-    #df.ensureAvailableFreeSpace(1024 * 1024 * 8)
-    f1 = open("in/41000000.dat", "r")
-    buf = f1.read()
-    f1.close()
-    print len(buf)
 
-    df.replaceDataForIdentifier(0x41000006, buf)
+    im = Image.open("test-image.png")
+    print im
+
+    # Swap the channels.  Can't find an easier way
+    pixdata = im.load()
+    for y in xrange(im.size[1]):
+        for x in xrange(im.size[0]):
+            b, g, r, a = pixdata[x, y]
+            pixdata[x, y] = (r, g, b, a)
+
+    if im.mode == "RGBA":
+        buf = ""
+        idata = im.tostring()
+        buf += struct.pack("<6I", 0x41000000, 0, im.size[0], im.size[1], 0x15, len(idata))
+        buf += idata
+        df.replaceDataForIdentifier(0x41000000, buf)
+
+    #df.replaceDataForIdentifier(0x41000006, buf)
     print "final:", df
     df.close()
