@@ -353,6 +353,50 @@ class AC2DataFile:
         dir, fe = self.searchForFileEntry(identifier)
         self.replaceData(dir, fe, newData)
 
+    def replaceImageForIdentifier(self, identifier, filename):
+        """Replaces file <identifier>, which better be an image (type 41), with the image in <filename>.
+
+        Supported image types are JPEG, or other RGB or RGBA images (such as png)."""
+        im = Image.open(filename)
+        #print im
+
+        if im.format == "JPEG":
+            f1 = open(im.filename, "r")
+            idata = f1.read()
+            f1.close()
+            buf = ""
+            buf += struct.pack("<6I", identifier, 0, 0, 0, 0x1f4, len(idata))
+            buf += idata
+            self.replaceDataForIdentifier(identifier, buf)
+
+        elif im.mode == "RGB":
+            # Swap the channels.  Can't find an easier way
+            pixdata = im.load()
+            for y in xrange(im.size[1]):
+                for x in xrange(im.size[0]):
+                    b, g, r = pixdata[x, y]
+                    pixdata[x, y] = (r, g, b)
+
+            buf = ""
+            idata = im.tostring()
+            buf += struct.pack("<6I", identifier, 0, im.size[0], im.size[1], 0x14, len(idata))
+            buf += idata
+            df.replaceDataForIdentifier(identifier, buf)
+
+        elif im.mode == "RGBA":
+            # Swap the channels.  Can't find an easier way
+            pixdata = im.load()
+            for y in xrange(im.size[1]):
+                for x in xrange(im.size[0]):
+                    b, g, r, a = pixdata[x, y]
+                    pixdata[x, y] = (r, g, b, a)
+
+            buf = ""
+            idata = im.tostring()
+            buf += struct.pack("<6I", identifier, 0, im.size[0], im.size[1], 0x15, len(idata))
+            buf += idata
+            df.replaceDataForIdentifier(identifier, buf)
+
     def writeDirectory(self, directory):
         buf = directory.data()
         self.writeData(buf, directory.offset)
@@ -384,47 +428,8 @@ if 1:
     df = AC2DataFile("test/portal.dat")
     print df
 
-    #im = Image.open("test-image.png")
-    im = Image.open("test-image2.jpeg")
-    print im
-
-    if im.format == "JPEG":
-        f1 = open(im.filename, "r")
-        idata = f1.read()
-        f1.close()
-        buf = ""
-        buf += struct.pack("<6I", 0x41000000, 0, 0, 0, 0x1f4, len(idata))
-        buf += idata
-        df.replaceDataForIdentifier(0x41000000, buf)
-
-    elif im.mode == "RGB":
-        # Swap the channels.  Can't find an easier way
-        pixdata = im.load()
-        for y in xrange(im.size[1]):
-            for x in xrange(im.size[0]):
-                b, g, r = pixdata[x, y]
-                pixdata[x, y] = (r, g, b)
-
-        buf = ""
-        idata = im.tostring()
-        buf += struct.pack("<6I", 0x41000000, 0, im.size[0], im.size[1], 0x14, len(idata))
-        buf += idata
-        df.replaceDataForIdentifier(0x41000000, buf)
-
-    elif im.mode == "RGBA":
-        # Swap the channels.  Can't find an easier way
-        pixdata = im.load()
-        for y in xrange(im.size[1]):
-            for x in xrange(im.size[0]):
-                b, g, r, a = pixdata[x, y]
-                pixdata[x, y] = (r, g, b, a)
-
-        buf = ""
-        idata = im.tostring()
-        buf += struct.pack("<6I", 0x41000000, 0, im.size[0], im.size[1], 0x15, len(idata))
-        buf += idata
-        df.replaceDataForIdentifier(0x41000000, buf)
-
     #df.replaceDataForIdentifier(0x41000006, buf)
+    df.replaceImageForIdentifier(0x41000000, "test-image.png")
+    #df.replaceImageForIdentifier(0x41000000, "test-image2.jpeg")
     print "final:", df
     df.close()
