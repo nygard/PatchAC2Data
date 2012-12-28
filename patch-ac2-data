@@ -84,10 +84,11 @@ class AC2DataFile:
 
     def __del__(self):
         #print "Destructing AC2DataFile, flushing..."
-        self.flush()
+        #self.flush()
+        pass
 
     def flush(self):
-        if self.dirty:
+        if self.dirty and self.fileHandle:
             print "Dirty, must write header."
             self.writeHeader()
 
@@ -110,7 +111,7 @@ class AC2DataFile:
         return self.cachedVersion
 
     def __str__(self):
-        return "file: %s, blockSize: %u, fileSize: %08x, contentType: %08x, contentSubtype: %08x, firstFreeBlock: %08x, lastFreeBlock: %08x, freeBlockCount: %u, rootOffset: %08x, dataVersion: %u" % (self.fileHandle.name, self.blockSize, self.fileSize, self.contentType, self.contentSubtype, self.firstFreeBlock, self.lastFreeBlock, self.freeBlockCount, self.rootOffset, self.version())
+        return "file: %s, blockSize: %u, fileSize: %u, contentType: %08x, contentSubtype: %08x, firstFreeBlock: %08x, lastFreeBlock: %08x, freeBlockCount: %u, rootOffset: %08x, dataVersion: %u, freeSpace: %u" % (self.fileHandle.name, self.blockSize, self.fileSize, self.contentType, self.contentSubtype, self.firstFreeBlock, self.lastFreeBlock, self.freeBlockCount, self.rootOffset, self.version(), self.freeSpace())
 
     def readDataFromBlocks(self, offset, expectedLength):
         blockData = ""
@@ -124,7 +125,7 @@ class AC2DataFile:
                 raise AC2Exception("Block offset %08x does not fall within data area of file (%08x - %08x)" % (nextBlock, blockSize, fileSize))
             if (nextBlock & 0x80000000) != 0:
                 raise AC2Exception("Block chain starting at %08x contains free block %08x" % (offset, nextBlock))
-            nextBlock, = struct.unpack("<I", self.fileHandle.read(4))
+            nextBlock = struct.unpack("<I", self.fileHandle.read(4))[0]
             blockData += self.fileHandle.read(self.blockSize-4)
 
         if len(blockData) < expectedLength:
@@ -180,11 +181,14 @@ class AC2DataFile:
     def addFreeBlocks(self, count):
         firstNewBlock = self.fileSize
         currentBlockOffset = self.fileSize
+        #print "addFreeBlocks(%u), firstNewBlock: %08x, currentBlockOffset: %08x" % (count, firstNewBlock, currentBlockOffset)
         blockData = "\0" * (self.blockSize - 4)
 
         # Need to update the last free block to point to the next, newly created free block
         if self.lastFreeBlock != 0:
-            buf = struct.pack("<I", self.lastFreeBlock | 0x80000000)
+            buf = struct.pack("<I", firstNewBlock | 0x80000000)
+            if 0:
+                print "Seek to %08x, write %u, %u -- %s" % (self.lastFreeBlock, len(buf), len(blockData), binascii.hexlify(buf))
             self.fileHandle.seek(self.lastFreeBlock)
             self.fileHandle.write(buf)
             self.fileHandle.write(blockData)
@@ -194,9 +198,11 @@ class AC2DataFile:
             nextBlockOffset = 0
             if index < count - 1:
                 nextBlockOffset = currentBlockOffset + self.blockSize
-            if 1:
+            if 0:
                 print "Writing free block %4lu (@ %08x) to point to %08x" % (index, currentBlockOffset, nextBlockOffset)
             buf = struct.pack("<I", nextBlockOffset | 0x80000000)
+            if 0:
+                print "Seek to %08x, write %u, %u -- %s" % (currentBlockOffset, len(buf), len(blockData), binascii.hexlify(buf))
             self.fileHandle.seek(currentBlockOffset)
             self.fileHandle.write(buf)
             self.fileHandle.write(blockData)
@@ -216,6 +222,7 @@ class AC2DataFile:
         return self.freeBlockCount * (self.blockSize - 4)
 
     def ensureAvailableFreeSpace(self, length):
+        #print "ensureAvailableFreeSpace(%u), freeSpace: %u" % (length, self.freeSpace())
         if length > self.freeSpace():
             # Add more space to accomodate the data.  Add in 1 MB chunks.
             neededSpace = length - self.freeSpace()
@@ -231,7 +238,53 @@ class AC2DataFile:
             self.addFreeBlocks(count)
             if length > self.freeSpace():
                 print "Error: Failed to add enough data to data file. (%u required, %u available)" % (length, self.freeSpace())
+            print "after extension:", self
+            #self.flush()
         None
+
+    def writeData(self, data, offset):
+        """Either over write data with same length, or write to new blocks. If the latter, this assumes there's enough free space available already."""
+        #print "writeData(), %u bytes at %08x" % (len(data), offset)
+        nextOffset = 0
+        blockCount = 0
+
+        isWritingToFreeBlocks = (offset == self.firstFreeBlock)
+        remaining = len(data)
+
+        #print "nextOffset: %08x, blockCount: %u, isWritingToFreeBlocks: %s, remaining: %u" % (nextOffset, blockCount, isWritingToFreeBlocks, remaining)
+
+        while remaining > 0:
+            #print "remaining:", remaining
+            self.fileHandle.seek(offset)
+            nextOffset = struct.unpack("<I", self.fileHandle.read(4))[0]
+            #print "nextOffset: %08x, from offset: %08x" % (nextOffset, offset)
+            if remaining > self.blockSize - 4 and (nextOffset & 0x80000000) == 0:
+                raise AC2Exception("Error: (1) next offset (@ %08x) is NOT marked free: %08x" % (offset, nextOffset))
+
+            self.fileHandle.seek(offset)
+
+            amount = 0;
+            nextOffset = nextOffset & 0x7fffffff
+            if remaining < self.blockSize - 4:
+                self.fileHandle.write(struct.pack("<I", 0))
+                amount = remaining
+            else:
+                amount = self.blockSize - 4
+                self.fileHandle.write(struct.pack("<I", nextOffset))
+
+            self.fileHandle.write(data[:amount])
+            data = data[amount:]
+            remaining = remaining - amount
+            blockCount = blockCount + 1
+            offset = nextOffset
+
+        if isWritingToFreeBlocks:
+            self.freeBlockCount = self.freeBlockCount - blockCount
+            self.firstFreeBlock = nextOffset
+            if self.firstFreeBlock == 0: # Fails when len(data) is 0
+                self.lastFreeBlock = 0
+
+        self.dirty = True
 
 if 0:
     df = AC2DataFile("test/portal.dat")
@@ -259,5 +312,11 @@ if 1:
     df = AC2DataFile("test/cell_2.dat")
     print df
     #print df.root()
-    df.ensureAvailableFreeSpace(1024 * 1024 * 8)
+    #df.ensureAvailableFreeSpace(1024 * 1024 * 8)
+    f1 = open("in/41000000.dat", "r")
+    buf = f1.read()
+    print len(buf)
+    df.ensureAvailableFreeSpace(len(buf))
+    f1.close()
+    df.writeData(buf, df.firstFreeBlock)
     df.close()
