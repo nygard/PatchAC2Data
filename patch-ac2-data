@@ -59,6 +59,18 @@ class AC2Directory:
     def __str__(self):
         return "AC2Directory at %08x, count: %u, file count: %u, leaf? %s" % (self.offset, self.count, len(self.files), self.subdirectoryOffsets[0] == 0)
 
+    def data(self):
+        buf = ""
+        for sdo in self.subdirectoryOffsets:
+            buf += struct.pack("<I", sdo)
+        #buf += struct.pack("<62I", self.subdirectoryOffsets)
+        buf += struct.pack("<I", len(self.files))
+        for fe in self.files:
+            buf += struct.pack("<4I", fe.identifier, fe.offset, fe.size, fe.mtime)
+        for index in range(len(self.files), 62):
+            buf += struct.pack("<4I", 0, 0, 0, 0)
+        return buf
+
 class AC2DataFile:
     """A simple class to allow data replacement in Asheron's Call 2 data files."""
 
@@ -105,7 +117,7 @@ class AC2DataFile:
 
     def version(self):
         if self.cachedVersion == None:
-            versionFE = df.searchForFileEntry(0xffff0001)
+            dir, versionFE = df.searchForFileEntry(0xffff0001)
             data = self.readDataFromBlocks(versionFE.offset, versionFE.size)
             self.cachedVersion = struct.unpack("<2I", data)[0]
         return self.cachedVersion
@@ -138,9 +150,11 @@ class AC2DataFile:
         return AC2Directory(self, self.rootOffset)
 
     def searchForFileEntry(self, identifier):
+        """Returns a tuple of (directory, fileEntry)."""
         return self._searchForFileEntry(identifier, self.rootOffset)
 
     def _searchForFileEntry(self, identifier, offset):
+        """Returns a tuple of (directory, fileEntry)."""
         #print "Searching for %08x starting at %08x" % (identifier, offset)
         directory = AC2Directory(self, offset)
         while True:
@@ -152,13 +166,13 @@ class AC2DataFile:
                 #print "%2u: Checking: %s" % (subdirIndex, fileEntry)
                 if fileEntry.identifier == identifier:
                     #print "Found!", fileEntry
-                    return fileEntry
+                    return (directory, fileEntry)
                 if identifier < fileEntry.identifier:
                     #print "check left, cur dir is", directory
                     subdirectoryOffset = directory.subdirectoryOffsets[subdirIndex]
                     if subdirectoryOffset == 0:
                         #print "%08x not found" % identifier
-                        return None
+                        return (None, None)
                     #print "%08x < %08x, need to check subdirectory %u @ %08x" % (identifier, fileEntry.identifier, subdirIndex, subdirectoryOffset)
                     directory = AC2Directory(self, subdirectoryOffset)
                     searchLeftSubdir = True
@@ -173,7 +187,7 @@ class AC2DataFile:
                 else:
                     # Not found
                     break
-        return None
+        return (None, None)
 
     def readDataFromFileEntry(self, fileEntry):
         return self.readDataFromBlocks(fileEntry.offset, fileEntry.size)
@@ -181,14 +195,14 @@ class AC2DataFile:
     def addFreeBlocks(self, count):
         firstNewBlock = self.fileSize
         currentBlockOffset = self.fileSize
-        #print "addFreeBlocks(%u), firstNewBlock: %08x, currentBlockOffset: %08x" % (count, firstNewBlock, currentBlockOffset)
+        print "addFreeBlocks(%u), firstNewBlock: %08x, currentBlockOffset: %08x" % (count, firstNewBlock, currentBlockOffset)
         blockData = "\0" * (self.blockSize - 4)
 
         # Need to update the last free block to point to the next, newly created free block
         if self.lastFreeBlock != 0:
             buf = struct.pack("<I", firstNewBlock | 0x80000000)
-            if 0:
-                print "Seek to %08x, write %u, %u -- %s" % (self.lastFreeBlock, len(buf), len(blockData), binascii.hexlify(buf))
+            if 1:
+                print "[%08x] Update last free block, write %08x %u, %u" % (self.lastFreeBlock, firstNewBlock | 0x80000000, len(buf), len(blockData))
             self.fileHandle.seek(self.lastFreeBlock)
             self.fileHandle.write(buf)
             self.fileHandle.write(blockData)
@@ -201,8 +215,8 @@ class AC2DataFile:
             if 0:
                 print "Writing free block %4lu (@ %08x) to point to %08x" % (index, currentBlockOffset, nextBlockOffset)
             buf = struct.pack("<I", nextBlockOffset | 0x80000000)
-            if 0:
-                print "Seek to %08x, write %u, %u -- %s" % (currentBlockOffset, len(buf), len(blockData), binascii.hexlify(buf))
+            if 1:
+                print "[%08x] Write free block %4lu to point to %08x %u, %u" % (currentBlockOffset, index, nextBlockOffset | 0x80000000, len(buf), len(blockData))
             self.fileHandle.seek(currentBlockOffset)
             self.fileHandle.write(buf)
             self.fileHandle.write(blockData)
@@ -244,21 +258,21 @@ class AC2DataFile:
 
     def writeData(self, data, offset):
         """Either over write data with same length, or write to new blocks. If the latter, this assumes there's enough free space available already."""
-        #print "writeData(), %u bytes at %08x" % (len(data), offset)
+        print "writeData(), %u bytes at %08x" % (len(data), offset)
         nextOffset = 0
         blockCount = 0
 
         isWritingToFreeBlocks = (offset == self.firstFreeBlock)
         remaining = len(data)
 
-        #print "nextOffset: %08x, blockCount: %u, isWritingToFreeBlocks: %s, remaining: %u" % (nextOffset, blockCount, isWritingToFreeBlocks, remaining)
+        print "nextOffset: %08x, blockCount: %u, isWritingToFreeBlocks: %s, remaining: %u" % (nextOffset, blockCount, isWritingToFreeBlocks, remaining)
 
         while remaining > 0:
-            #print "remaining:", remaining
+            print "remaining:", remaining
             self.fileHandle.seek(offset)
             nextOffset = struct.unpack("<I", self.fileHandle.read(4))[0]
-            #print "nextOffset: %08x, from offset: %08x" % (nextOffset, offset)
-            if remaining > self.blockSize - 4 and (nextOffset & 0x80000000) == 0:
+            print "[%08x] Read next offset: %08x %08x" % (offset, nextOffset, nextOffset & 0x7fffffff)
+            if isWritingToFreeBlocks and remaining > self.blockSize - 4 and (nextOffset & 0x80000000) == 0:
                 raise AC2Exception("Error: (1) next offset (@ %08x) is NOT marked free: %08x" % (offset, nextOffset))
 
             self.fileHandle.seek(offset)
@@ -268,10 +282,13 @@ class AC2DataFile:
             if remaining < self.blockSize - 4:
                 self.fileHandle.write(struct.pack("<I", 0))
                 amount = remaining
+                print "[%08x] Write last block pointer, remaining data: %u" % (offset, amount)
             else:
                 amount = self.blockSize - 4
                 self.fileHandle.write(struct.pack("<I", nextOffset))
+                print "[%08x] Write block pointer %08x, remainng data: %u" % (offset, nextOffset, amount)
 
+            print "[%08x] Write block data, %u bytes" % (offset + 4, amount)
             self.fileHandle.write(data[:amount])
             data = data[amount:]
             remaining = remaining - amount
@@ -286,6 +303,63 @@ class AC2DataFile:
 
         self.dirty = True
 
+    def freeBlocks(self, offset):
+        """Adds the block chain starting at offset to the free blocks."""
+        emptyBlockData = "\0" * (self.blockSize - 4)
+        currentBlock = offset
+        count = 0
+        print "freeBlocks(%08x)" % offset
+        while currentBlock != 0:
+            self.fileHandle.seek(currentBlock)
+            nextBlock = struct.unpack("<I", self.fileHandle.read(4))[0]
+            print "[%08x] nextBlock: %08x" % (currentBlock, nextBlock)
+
+            self.fileHandle.seek(currentBlock)
+            if nextBlock == 0:
+                print "[%08x] (a) Writing %08x" % (currentBlock, self.firstFreeBlock | 0x80000000)
+                self.fileHandle.write(struct.pack("<I", self.firstFreeBlock | 0x80000000))
+            else:
+                print "[%08x] (b) Writing %08x" % (currentBlock, nextBlock | 0x80000000)
+                self.fileHandle.write(struct.pack("<I", nextBlock | 0x80000000))
+
+            print "[%08x] Writing %u empty bytes" % (currentBlock + 4, len(emptyBlockData))
+            self.fileHandle.write(emptyBlockData)
+            currentBlock = nextBlock
+            count = count + 1
+
+        print "Setting firstFreeBlock to %08x" % offset
+        self.firstFreeBlock = offset
+        self.dirty = True
+        print "now:", self
+
+    def replaceData(self, directory, fileEntry, newData):
+        """Replaces the data for fileEntry with newData.  The directory must be the directory that contains that file entry."""
+        print "-------------------- Ensure available free space"
+        self.ensureAvailableFreeSpace(len(newData))
+        oldOffset = fileEntry.offset
+        fileEntry.offset = self.firstFreeBlock
+        fileEntry.size = len(newData)
+        print "-------------------- write new data"
+        self.writeData(newData, fileEntry.offset)
+        print "-------------------- rewrite directory", directory
+        self.writeDirectory(directory)
+        print "-------------------- free up the old data at %08x" % oldOffset
+        # And then free up the old data
+        self.freeBlocks(oldOffset)
+        print "-------------------- Done."
+
+    def replaceDataForIdentifier(self, identifier, newData):
+        dir, fe = self.searchForFileEntry(identifier)
+        self.replaceData(dir, fe, newData)
+
+    def writeDirectory(self, directory):
+        buf = directory.data()
+        filename = "/tmp/dir-%08x.dat" % directory.offset
+        f1 = open(filename, "wb")
+        f1.write(buf)
+        f1.close()
+        self.writeData(buf, directory.offset)
+
 if 0:
     df = AC2DataFile("test/portal.dat")
     print df
@@ -293,12 +367,13 @@ if 0:
     print df.root()
     print "======================================================================"
 
-    #fe = df.searchForFileEntry(0x41000000)
-    #fe = df.searchForFileEntry(0x01000001)
-    #fe = df.searchForFileEntry(0x0100001c)
+    #dir, fe = df.searchForFileEntry(0x41000000)
+    #dir, fe = df.searchForFileEntry(0x01000001)
+    #dir, fe = df.searchForFileEntry(0x0100001c)
 
     for identifier in [0x41000000, 0x41000002, 0x41000003, 0x41000004, 0x41000005, 0x41000006, 0x41000007]:
-        fe = df.searchForFileEntry(identifier)
+        dir, fe = df.searchForFileEntry(identifier)
+        print dir
         print fe
         if fe:
             data = df.readDataFromFileEntry(fe)
@@ -309,14 +384,16 @@ if 0:
             f1.close()
 
 if 1:
-    df = AC2DataFile("test/cell_2.dat")
+    #df = AC2DataFile("test/cell_2.dat")
+    df = AC2DataFile("test/portal.dat")
     print df
     #print df.root()
     #df.ensureAvailableFreeSpace(1024 * 1024 * 8)
     f1 = open("in/41000000.dat", "r")
     buf = f1.read()
-    print len(buf)
-    df.ensureAvailableFreeSpace(len(buf))
     f1.close()
-    df.writeData(buf, df.firstFreeBlock)
+    print len(buf)
+
+    df.replaceDataForIdentifier(0x41000006, buf)
+    print "final:", df
     df.close()
