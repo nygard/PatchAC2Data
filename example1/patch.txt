@@ -1,2 +1,5 @@
 datafile portal.dat
 replace 4100452f osteth.png
+replace 41000970 41000970.png
+replace 410011fb 410011fb.png
+replace 41004528 41004528.png
