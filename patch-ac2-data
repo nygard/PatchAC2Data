@@ -101,7 +101,7 @@ class AC2DataFile:
 
     def flush(self):
         if self.dirty and self.fileHandle:
-            print "Dirty, must write header."
+            #print "Dirty, must write header."
             self.writeHeader()
 
     def close(self):
@@ -110,7 +110,7 @@ class AC2DataFile:
 
     def writeHeader(self):
         buf = struct.pack("<9I", 0x00005442, self.blockSize, self.fileSize, self.contentType, self.contentSubtype, self.firstFreeBlock, self.lastFreeBlock, self.freeBlockCount, self.rootOffset)
-        print "buf len:", len(buf)
+        #print "buf len:", len(buf)
         self.fileHandle.seek(0x12c)
         self.fileHandle.write(buf)
         self.dirty = False
@@ -195,13 +195,13 @@ class AC2DataFile:
     def addFreeBlocks(self, count):
         firstNewBlock = self.fileSize
         currentBlockOffset = self.fileSize
-        print "addFreeBlocks(%u), firstNewBlock: %08x, currentBlockOffset: %08x" % (count, firstNewBlock, currentBlockOffset)
+        #print "addFreeBlocks(%u), firstNewBlock: %08x, currentBlockOffset: %08x" % (count, firstNewBlock, currentBlockOffset)
         blockData = "\0" * (self.blockSize - 4)
 
         # Need to update the last free block to point to the next, newly created free block
         if self.lastFreeBlock != 0:
             buf = struct.pack("<I", firstNewBlock | 0x80000000)
-            if 1:
+            if 0:
                 print "[%08x] Update last free block, write %08x %u, %u" % (self.lastFreeBlock, firstNewBlock | 0x80000000, len(buf), len(blockData))
             self.fileHandle.seek(self.lastFreeBlock)
             self.fileHandle.write(buf)
@@ -215,7 +215,7 @@ class AC2DataFile:
             if 0:
                 print "Writing free block %4lu (@ %08x) to point to %08x" % (index, currentBlockOffset, nextBlockOffset)
             buf = struct.pack("<I", nextBlockOffset | 0x80000000)
-            if 1:
+            if 0:
                 print "[%08x] Write free block %4lu to point to %08x %u, %u" % (currentBlockOffset, index, nextBlockOffset | 0x80000000, len(buf), len(blockData))
             self.fileHandle.seek(currentBlockOffset)
             self.fileHandle.write(buf)
@@ -244,7 +244,7 @@ class AC2DataFile:
             bytesPerExtension = ((1024 * 1024) / self.blockSize) * (self.blockSize - 4)
             extensions = math.ceil(float(neededSpace) / bytesPerExtension)
             count = int(1024 * 1024 / self.blockSize * extensions)
-            if 1:
+            if 0:
                 print "Need %u bytes more." % neededSpace
                 print "bytesPerExtension: %u" % bytesPerExtension
                 print "extensions: %u" % extensions
@@ -258,20 +258,20 @@ class AC2DataFile:
 
     def writeData(self, data, offset):
         """Either over write data with same length, or write to new blocks. If the latter, this assumes there's enough free space available already."""
-        print "writeData(), %u bytes at %08x" % (len(data), offset)
+        #print "writeData(), %u bytes at %08x" % (len(data), offset)
         nextOffset = 0
         blockCount = 0
 
         isWritingToFreeBlocks = (offset == self.firstFreeBlock)
         remaining = len(data)
 
-        print "nextOffset: %08x, blockCount: %u, isWritingToFreeBlocks: %s, remaining: %u" % (nextOffset, blockCount, isWritingToFreeBlocks, remaining)
+        #print "nextOffset: %08x, blockCount: %u, isWritingToFreeBlocks: %s, remaining: %u" % (nextOffset, blockCount, isWritingToFreeBlocks, remaining)
 
         while remaining > 0:
-            print "remaining:", remaining
+            #print "remaining:", remaining
             self.fileHandle.seek(offset)
             nextOffset = struct.unpack("<I", self.fileHandle.read(4))[0]
-            print "[%08x] Read next offset: %08x %08x" % (offset, nextOffset, nextOffset & 0x7fffffff)
+            #print "[%08x] Read next offset: %08x %08x" % (offset, nextOffset, nextOffset & 0x7fffffff)
             if isWritingToFreeBlocks and remaining > self.blockSize - 4 and (nextOffset & 0x80000000) == 0:
                 raise AC2Exception("Error: (1) next offset (@ %08x) is NOT marked free: %08x" % (offset, nextOffset))
 
@@ -282,13 +282,13 @@ class AC2DataFile:
             if remaining < self.blockSize - 4:
                 self.fileHandle.write(struct.pack("<I", 0))
                 amount = remaining
-                print "[%08x] Write last block pointer, remaining data: %u" % (offset, amount)
+                #print "[%08x] Write last block pointer, remaining data: %u" % (offset, amount)
             else:
                 amount = self.blockSize - 4
                 self.fileHandle.write(struct.pack("<I", nextOffset))
-                print "[%08x] Write block pointer %08x, remainng data: %u" % (offset, nextOffset, amount)
+                #print "[%08x] Write block pointer %08x, remainng data: %u" % (offset, nextOffset, amount)
 
-            print "[%08x] Write block data, %u bytes" % (offset + 4, amount)
+            #print "[%08x] Write block data, %u bytes" % (offset + 4, amount)
             self.fileHandle.write(data[:amount])
             data = data[amount:]
             remaining = remaining - amount
@@ -308,45 +308,45 @@ class AC2DataFile:
         emptyBlockData = "\0" * (self.blockSize - 4)
         currentBlock = offset
         count = 0
-        print "freeBlocks(%08x)" % offset
+        #print "freeBlocks(%08x)" % offset
         while currentBlock != 0:
             self.fileHandle.seek(currentBlock)
             nextBlock = struct.unpack("<I", self.fileHandle.read(4))[0]
-            print "[%08x] nextBlock: %08x" % (currentBlock, nextBlock)
+            #print "[%08x] nextBlock: %08x" % (currentBlock, nextBlock)
 
             self.fileHandle.seek(currentBlock)
             if nextBlock == 0:
-                print "[%08x] (a) Writing %08x" % (currentBlock, self.firstFreeBlock | 0x80000000)
+                #print "[%08x] (a) Writing %08x" % (currentBlock, self.firstFreeBlock | 0x80000000)
                 self.fileHandle.write(struct.pack("<I", self.firstFreeBlock | 0x80000000))
             else:
-                print "[%08x] (b) Writing %08x" % (currentBlock, nextBlock | 0x80000000)
+                #print "[%08x] (b) Writing %08x" % (currentBlock, nextBlock | 0x80000000)
                 self.fileHandle.write(struct.pack("<I", nextBlock | 0x80000000))
 
-            print "[%08x] Writing %u empty bytes" % (currentBlock + 4, len(emptyBlockData))
+            #print "[%08x] Writing %u empty bytes" % (currentBlock + 4, len(emptyBlockData))
             self.fileHandle.write(emptyBlockData)
             currentBlock = nextBlock
             count = count + 1
 
-        print "Setting firstFreeBlock to %08x" % offset
+        #print "Setting firstFreeBlock to %08x" % offset
         self.firstFreeBlock = offset
         self.dirty = True
-        print "now:", self
+        #print "now:", self
 
     def replaceData(self, directory, fileEntry, newData):
         """Replaces the data for fileEntry with newData.  The directory must be the directory that contains that file entry."""
-        print "-------------------- Ensure available free space"
+        #print "-------------------- Ensure available free space"
         self.ensureAvailableFreeSpace(len(newData))
         oldOffset = fileEntry.offset
         fileEntry.offset = self.firstFreeBlock
         fileEntry.size = len(newData)
-        print "-------------------- write new data"
+        #print "-------------------- write new data"
         self.writeData(newData, fileEntry.offset)
-        print "-------------------- rewrite directory", directory
+        #print "-------------------- rewrite directory", directory
         self.writeDirectory(directory)
-        print "-------------------- free up the old data at %08x" % oldOffset
+        #print "-------------------- free up the old data at %08x" % oldOffset
         # And then free up the old data
         self.freeBlocks(oldOffset)
-        print "-------------------- Done."
+        #print "-------------------- Done."
 
     def replaceDataForIdentifier(self, identifier, newData):
         dir, fe = self.searchForFileEntry(identifier)
