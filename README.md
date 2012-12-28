@@ -46,8 +46,8 @@ Contact
 
 You may contact the author by:
 
-                  e-mail: nygard at gmail.com
-   Asheron's Call forums: Lothnar
+                   e-mail: nygard at gmail.com
+    Asheron's Call forums: Lothnar
 
 License
 -------
