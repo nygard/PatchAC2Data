@@ -20,6 +20,8 @@ import binascii
 import time
 import math
 import Image # PIL 1.1.7 <http://www.pythonware.com/products/pil/>
+import sys, os
+import re
 
 class AC2Exception(Exception):
     pass
@@ -118,7 +120,7 @@ class AC2DataFile:
 
     def version(self):
         if self.cachedVersion == None:
-            dir, versionFE = df.searchForFileEntry(0xffff0001)
+            dir, versionFE = self.searchForFileEntry(0xffff0001)
             data = self.readDataFromBlocks(versionFE.offset, versionFE.size)
             self.cachedVersion = struct.unpack("<2I", data)[0]
         return self.cachedVersion
@@ -253,7 +255,7 @@ class AC2DataFile:
             self.addFreeBlocks(count)
             if length > self.freeSpace():
                 print "Error: Failed to add enough data to data file. (%u required, %u available)" % (length, self.freeSpace())
-            print "after extension:", self
+            #print "after extension:", self
             #self.flush()
         None
 
@@ -381,7 +383,7 @@ class AC2DataFile:
             idata = im.tostring()
             buf += struct.pack("<6I", identifier, 0, im.size[0], im.size[1], 0x14, len(idata))
             buf += idata
-            df.replaceDataForIdentifier(identifier, buf)
+            self.replaceDataForIdentifier(identifier, buf)
 
         elif im.mode == "RGBA":
             # Swap the channels.  Can't find an easier way
@@ -395,7 +397,7 @@ class AC2DataFile:
             idata = im.tostring()
             buf += struct.pack("<6I", identifier, 0, im.size[0], im.size[1], 0x15, len(idata))
             buf += idata
-            df.replaceDataForIdentifier(identifier, buf)
+            self.replaceDataForIdentifier(identifier, buf)
 
     def writeDirectory(self, directory):
         buf = directory.data()
@@ -424,7 +426,7 @@ if 0:
             f1.write(data)
             f1.close()
 
-if 1:
+if 0:
     df = AC2DataFile("test/portal.dat")
     print df
 
@@ -433,3 +435,55 @@ if 1:
     #df.replaceImageForIdentifier(0x41000000, "test-image2.jpeg")
     print "final:", df
     df.close()
+
+def main(args):
+    print "patch-ac2-data.py v1"
+    print
+    if len(args) < 1:
+        print "Usage: patch-ac2-data.py <patch directory>"
+        print
+        print "       First of all, be sure to BACK UP your data files.  If anything goes wrong they'll"
+        print "       likely be left in an unusable state!"
+        print
+        print "       Run this from the directory that contains the Asheron's Call 2 data files."
+        print
+        print "       <patch directory> is the path to the directory that contains the replacement images,"
+        print "       and the patch.txt file.  This text file has commands, one per line, case sensitive:"
+        print
+        print "           'datafile <path>'                -- switch to patching the data file at <path>"
+        print "           'replace <identifer> <filename>' -- replace the <identifier> (specified as hex without a"
+        print "                                               leading 0x) with the image in <filename>"
+        print
+
+        sys.exit(0)
+
+    patchdir = args[0]
+
+    r_replace = re.compile("^replace ([0-9a-fA-F]+) ([\S]+)")
+
+    currentDataFile = None
+    path = os.path.join(patchdir, "patch.txt")
+    print "Patching from:", path
+    patch = open(path, "r")
+    for line in patch.readlines():
+        line = line.rstrip()
+        if line.startswith("datafile "):
+            filename = line[9:]
+            print "    Patching", filename
+            if currentDataFile:
+                currentDataFile.close()
+            currentDataFile = AC2DataFile(filename)
+            #print "current data file:", currentDataFile
+        m1 = r_replace.match(line)
+        if m1:
+            (identifier, filename) = m1.group(1, 2)
+            identifier = int(identifier, 16)
+            filename = os.path.join(patchdir, filename)
+            print "        Replace file %08x with %s" % (identifier, filename)
+            currentDataFile.replaceImageForIdentifier(identifier, filename)
+    currentDataFile.close()
+    patch.close()
+    print "Done."
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

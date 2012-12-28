@@ -1,0 +1,6 @@
+datafile portal.dat
+replace 41000000 test-image.png
+datafile cell_2.dat
+datafile portal.dat
+replace 41000006 test-image2.jpeg
+
