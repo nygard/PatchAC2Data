@@ -355,6 +355,11 @@ class AC2DataFile:
         dir, fe = self.searchForFileEntry(identifier)
         self.replaceData(dir, fe, newData)
 
+    def replaceRawDataForIdentifier(self, identifier, filename):
+        f1 = open(filename, "r")
+        buf = f1.read()
+        self.replaceDataForIdentifier(identifier, buf)
+
     def replaceImageForIdentifier(self, identifier, filename):
         """Replaces file <identifier>, which better be an image (type 41), with the image in <filename>.
 
@@ -460,6 +465,7 @@ def main(args):
     patchdir = args[0]
 
     r_replace = re.compile("^replace ([0-9a-fA-F]+) ([\S]+)")
+    r_replace_raw = re.compile("^replace-raw ([0-9a-fA-F]+) ([\S]+)")
 
     currentDataFile = None
     path = os.path.join(patchdir, "patch.txt")
@@ -481,6 +487,14 @@ def main(args):
             filename = os.path.join(patchdir, filename)
             print "        Replace file %08x with %s" % (identifier, filename)
             currentDataFile.replaceImageForIdentifier(identifier, filename)
+
+        m2 = r_replace_raw.match(line)
+        if m2:
+            (identifier, filename) = m2.group(1, 2)
+            identifier = int(identifier, 16)
+            filename = os.path.join(patchdir, filename)
+            print "        Replace raw file %08x with %s" % (identifier, filename)
+            currentDataFile.replaceRawDataForIdentifier(identifier, filename)
     currentDataFile.close()
     patch.close()
     print "Done."
