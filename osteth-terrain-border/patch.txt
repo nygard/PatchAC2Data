@@ -1,0 +1,34 @@
+datafile highres.dat
+replace-raw 410001a8 410001a8-red-border
+replace-raw 4100126d 4100126d-red-border
+replace-raw 4100129a 4100129a-red-border
+replace-raw 41001312 41001312-red-border
+replace-raw 41001330 41001330-red-border
+replace-raw 41001352 41001352-red-border
+datafile portal.dat
+replace-raw 410001a9 410001a9-red-border
+replace-raw 410001aa 410001aa-red-border
+replace-raw 410001ab 410001ab-red-border
+replace-raw 410001ac 410001ac-red-border
+replace-raw 410001ad 410001ad-red-border
+replace-raw 4100126e 4100126e-red-border
+replace-raw 4100126f 4100126f-red-border
+replace-raw 41001270 41001270-red-border
+replace-raw 41001271 41001271-red-border
+replace-raw 41001272 41001272-red-border
+replace-raw 4100129b 4100129b-red-border
+replace-raw 4100129c 4100129c-red-border
+replace-raw 4100129d 4100129d-red-border
+replace-raw 4100129e 4100129e-red-border
+replace-raw 41001313 41001313-red-border
+replace-raw 41001314 41001314-red-border
+replace-raw 41001315 41001315-red-border
+replace-raw 41001316 41001316-red-border
+replace-raw 41001331 41001331-red-border
+replace-raw 41001332 41001332-red-border
+replace-raw 41001333 41001333-red-border
+replace-raw 41001334 41001334-red-border
+replace-raw 41001353 41001353-red-border
+replace-raw 41001354 41001354-red-border
+replace-raw 41001355 41001355-red-border
+replace-raw 41001356 41001356-red-border
