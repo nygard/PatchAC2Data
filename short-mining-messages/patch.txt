@@ -1,0 +1,2 @@
+datafile local_English.dat
+replace-raw 25001b52 25001b52-shorter
