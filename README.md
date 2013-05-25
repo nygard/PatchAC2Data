@@ -26,7 +26,7 @@ of your original data files before using this!
 From the command line, in the directory that you've put the python script, just run patch-ac2-data.py
 to see if that works -- it'll print some usage instructions:
 
-> patch-ac2-data.py
+> > patch-ac2-data.py
 
 patch-ac2-data.py v1
 
@@ -45,9 +45,28 @@ Usage: patch-ac2-data.py <patch directory>
            'replace <identifer> <filename>' -- replace the <identifier> (specified as hex without a
                                                leading 0x) with the image in <filename>
 
-I also have an archive of all the extracted images, so that you can find the image you want to
-replace.  You can download this archive at <http://stevenygard.com/download/ac2/ac2-images-2013-01-23.zip>.
-This is big, over 5 gigabytes!
+The first argument to the script is a name of a directory containing the patch.  The directory simply
+has a file, patch.txt, that says what to do, as well as the images/data that it is replacing.  The
+'example1' is an example of this.
+
+You'll need to know the identifiers of the files you want to replace.  I have an archive of all the
+extracted images, so that you can find the image you want to replace.  You can download this archive
+at <http://stevenygard.com/download/ac2/ac2-images-2013-01-23.zip>.  This is big, over 5 gigabytes!
+The identifier is part of the filename.
+
+Examples
+--------
+
+I'll try to put up the following examples:
+
+* Replace difficulty map with portal map route.
+* Non-transparent radar
+* Non-transparent left-side window (map, examine)
+* Non-transparent right side window (skills, quests)
+* Shorter mining result messages
+* Osteth terrain grid textures, show lines every 0.1 radar units, to help with mining
+* Map hero titles back to class names, so you don't have to look them up in a chart all the time
+* Non-camouflaged cursor
 
 Contact
 -------
