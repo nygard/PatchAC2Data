@@ -1,0 +1,3 @@
+datafile portal.dat
+replace 4100336e radar-top-opaque.png
+replace 410024bd radar-bottom-opaque.png
